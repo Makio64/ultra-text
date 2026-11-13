@@ -1,0 +1,81 @@
+name: Bug report
+description: Report a defect in ultra-text
+labels: ['bug']
+body:
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and version
+      placeholder: Chrome 155, Safari 26.4, Firefox 158, …
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: OS and GPU
+      placeholder: macOS 26 / Apple M3, Windows 11 / RTX 4070, …
+    validations:
+      required: true
+  - type: input
+    id: three-version
+    attributes:
+      label: Three.js version
+      placeholder: 0.187.0
+    validations:
+      required: true
+  - type: input
+    id: library-version
+    attributes:
+      label: ultra-text version
+      placeholder: 1.0.0
+    validations:
+      required: true
+  - type: dropdown
+    id: text-backend
+    attributes:
+      label: textBackend
+      options:
+        - "'sdf' (default)"
+        - "'windfoil'"
+        - "'slug'"
+    validations:
+      required: true
+  - type: dropdown
+    id: atlas-mode
+    attributes:
+      label: atlasMode
+      options:
+        - "'auto' (default)"
+        - "'gpu'"
+        - "'cpu'"
+    validations:
+      required: true
+  - type: dropdown
+    id: layout-engine
+    attributes:
+      label: layoutEngine
+      options:
+        - "'range' (default)"
+        - "'pretext'"
+    validations:
+      required: true
+  - type: dropdown
+    id: backend
+    attributes:
+      label: Renderer backend
+      description: After `await renderer.init()`, which backend did WebGPURenderer pick?
+      options:
+        - WebGPU
+        - WebGL2 fallback
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction steps
+      description: >-
+        Steps to reproduce, plus a minimal repro link (CodePen, StackBlitz, or a repository)
+        if you can. Include the captured markup and the options passed to DomText.create.
+    validations:
+      required: true

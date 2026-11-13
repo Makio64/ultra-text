@@ -1,0 +1,61 @@
+name: Release
+
+# Tag a version to release:
+#   npm version <patch|minor|major> && git push --follow-tags
+# npm trusted publishing (OIDC) authenticates this workflow and attaches provenance, so no
+# long-lived token is needed once the package's trusted publisher is configured on npmjs.com
+# (repository Makio64/ultra-text, workflow release.yml, environment release). Provenance
+# requires a public repository.
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: release
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      # Trusted publishing needs npm 11.5.1 or later; Node 22 bundles npm 10.
+      - name: Update npm
+        run: npm install --global npm@11
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify the tag matches package.json
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          version="$(node -p "require('./package.json').version")"
+          if [ "$tag" != "$version" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match package.json version $version" >&2
+            exit 1
+          fi
+
+      # prepublishOnly runs `pnpm check`, the same suite as CI, before packing.
+      - name: Publish
+        run: npm publish
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+          # Only for a first publish before the trusted publisher exists; OIDC is used otherwise.
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

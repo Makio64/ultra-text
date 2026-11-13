@@ -1,0 +1,381 @@
+import {
+  WebGPUBackend,
+  type InstancedBufferGeometry,
+  type Side,
+  type WebGPURenderer,
+} from 'three/webgpu'
+import type { GlyphTextMaterial } from '../text/GlyphTextMaterial.js'
+import type { ResolvedTextTone } from '../text/tone.js'
+import type {
+  DomLayoutSnapshot,
+  GlyphRequest,
+  SdfAtlas,
+  SdfMotionOptions,
+  TextFill,
+  TextToneOptions,
+  TextVertex,
+  WindfoilOptions,
+  WindfoilOutlineProvider,
+} from '../types.js'
+import type { WindfoilColorPart, WindfoilColorResources } from './color.js'
+import {
+  createWindfoilGlyphGeometry,
+  updateWindfoilGlyphGeometry,
+  windfoilContentFits,
+} from './geometry.js'
+import { WindfoilMaterial } from './WindfoilMaterial.js'
+import {
+  preprocessWindfoilGlyphs,
+  type WindfoilGlyphHeader,
+  type WindfoilPreprocessStats,
+} from './preprocessCore.js'
+import type { WindfoilSizeSwitch } from './sizeSwitch.js'
+import {
+  abortable,
+  createWindfoilStorage,
+  drawnEffects,
+  throwIfAborted,
+  type TextEffects,
+} from './storage.js'
+export interface WindfoilBackend {
+  readonly kind: 'windfoil' | 'slug'
+  readonly layered: boolean
+  /**
+   * SDF atlas drawn by the companion part: glyphs without outlines plus size-switched glyphs,
+   * and with `effects` every drawable outline.
+   */
+  readonly companion: SdfAtlas | null
+  /**
+   * The outline and drop shadow that an SDF underlay draws under the analytic glyphs, from
+   * their companion slots; null without effects that draw anything.
+   */
+  readonly effects: TextEffects | null
+  readonly color: WindfoilColorPart | null
+  /** The `windfoil.sdfBelowPx` switch, or null when no glyph can switch. */
+  readonly sizeSwitch: WindfoilSizeSwitch | null
+  covers(key: string): boolean
+  /** Whether the Windfoil primary batch draws this glyph. */
+  primaryCovers(key: string): boolean
+  /** Whether the primary batch or the colour part draws this glyph from its outline. */
+  analyticCovers(key: string): boolean
+  motionOrdinals(snapshot: DomLayoutSnapshot): Float32Array
+  readonly glyphs: ReadonlyMap<string, WindfoilGlyphHeader>
+  readonly storageBytes: number
+  readonly preprocessStats: WindfoilPreprocessStats
+  contentFits(geometry: InstancedBufferGeometry, snapshot: DomLayoutSnapshot): boolean
+  createGeometry(
+    snapshot: DomLayoutSnapshot,
+    motionPadding: number,
+    ordinals?: Float32Array,
+  ): { geometry: InstancedBufferGeometry; maxSequence: number }
+  updateGeometry(
+    geometry: InstancedBufferGeometry,
+    snapshot: DomLayoutSnapshot,
+    motionPadding: number,
+    ordinals?: Float32Array,
+  ): number | null
+  /** Whether geometry carries each glyph's font size, which a tone that dilates reads. */
+  setGlyphEm(value: boolean): void
+  createMaterial(options: {
+    readonly fill?: TextFill
+    readonly vertex?: TextVertex
+    readonly shadowCutoff?: number
+    readonly side?: Side
+    /** `false` builds static text, without the motion graph. */
+    readonly motion: SdfMotionOptions | false
+    readonly maxSequence: number
+    readonly layered?: boolean
+    /** Reaches the text ink of the primary batch; colour parts and shapes stay exact. */
+    readonly tone?: TextToneOptions | ResolvedTextTone | false
+  }): GlyphTextMaterial
+  dispose(): void
+}
+
+/** Windfoil or Slug options once `DomSdf` has chosen the outline provider. */
+export type WindfoilBuildOptions = WindfoilOptions & {
+  readonly outlineProvider: WindfoilOutlineProvider
+}
+
+/** All asynchronous resolution completes before retaining GPU storage. */
+export async function buildWindfoilBackend(
+  renderer: WebGPURenderer,
+  requests: readonly GlyphRequest[],
+  options: WindfoilBuildOptions,
+  signal: AbortSignal,
+  companionBuilder?: {
+    build(requests: readonly GlyphRequest[], signal: AbortSignal): Promise<SdfAtlas>
+    /** The caller's outline and drop shadow, which the companion then bakes every glyph for. */
+    readonly effects?: TextEffects
+  },
+): Promise<WindfoilBackend | null> {
+  const sdfBelow = options.sdfBelowPx
+  const switchModule =
+    sdfBelow === undefined ? null : await abortable(import('./sizeSwitch.js'), signal)
+  // Before init, so an invalid threshold fails even where a fallback would be chosen.
+  switchModule?.assertThreshold(sdfBelow)
+  await abortable(renderer.init(), signal)
+  throwIfAborted(signal)
+  const fallback = options.fallback === 'sdf' || options.fallback === 'sdf-glyphs'
+  if (!(renderer.backend instanceof WebGPUBackend)) {
+    if (fallback) return null
+    throw new Error(
+      'DomSdf: the Windfoil text backend requires WebGPU; set windfoil.fallback to "sdf" to fall back',
+    )
+  }
+  const limit =
+    (renderer.backend as unknown as { device?: { limits: { maxVertexBuffers: number } } }).device
+      ?.limits.maxVertexBuffers ?? 8
+  if (limit < 7) {
+    if (fallback) return null
+    throw new Error('DomSdf: Windfoil requires at least seven vertex buffers')
+  }
+  const effects = companionBuilder?.effects ? drawnEffects(companionBuilder.effects) : null
+  const extended =
+    !!effects ||
+    requests.some((request) => request.shape) ||
+    options.fallback === 'sdf-glyphs' ||
+    options.compositing === 'shader' ||
+    sdfBelow !== undefined
+  let extensions = extended ? await abortable(import('./requests.js'), signal) : null
+  let resolved: {
+    request: GlyphRequest
+    outline: Awaited<ReturnType<typeof options.outlineProvider>>
+  }[]
+  if (extensions) {
+    resolved = await abortable(
+      Promise.all(
+        requests.map(async (request) => ({
+          request,
+          outline: await extensions!.resolveShapeRequest(request, options, signal),
+        })),
+      ),
+      signal,
+    )
+  } else {
+    const syncResolved: typeof resolved = []
+    let pending: Promise<(typeof resolved)[number]>[] | null = null
+    for (const request of requests) {
+      const out = options.outlineProvider(request, signal)
+      if (out instanceof Promise) {
+        pending ??= syncResolved.map((item) => Promise.resolve(item))
+        pending.push(out.then((outline) => ({ request, outline })))
+      } else if (pending) {
+        pending.push(Promise.resolve({ request, outline: out }))
+      } else {
+        syncResolved.push({ request, outline: out })
+      }
+    }
+    resolved = pending ? await abortable(Promise.all(pending), signal) : syncResolved
+  }
+  throwIfAborted(signal)
+  const missing = resolved.filter((item) => item.outline === null)
+  if (missing.length) {
+    if (
+      options.fallback === 'sdf' ||
+      (options.fallback === 'sdf-glyphs' && missing.length === resolved.length)
+    )
+      return null
+    if (options.fallback !== 'sdf-glyphs' || !companionBuilder)
+      throw new Error(
+        `DomSdf: Windfoil outlineProvider returned null for ${JSON.stringify(missing[0]!.request.character)} in ${missing[0]!.request.font.family}`,
+      )
+  }
+  const needsRequests = !extensions && resolved.some((item) => item.outline?.clipBox)
+  const needsLayerNormalization = resolved.some(
+    (item) => item.outline?.layers !== undefined || item.outline?.clipBox !== undefined,
+  )
+  const [lateExtensions, layerModule] =
+    needsRequests || needsLayerNormalization
+      ? await abortable(
+          Promise.all([
+            needsRequests ? import('./requests.js') : Promise.resolve(null),
+            needsLayerNormalization ? import('./layerNormalization.js') : Promise.resolve(null),
+          ]),
+          signal,
+        )
+      : [null, null]
+  extensions ??= lateExtensions
+  const prepared = preprocessWindfoilGlyphs(
+    resolved.filter(
+      (item): item is typeof item & { outline: NonNullable<typeof item.outline> } =>
+        item.outline !== null,
+    ),
+    {
+      signal,
+      // Colour glyphs the composite shader draws (see buildWindfoilColorResources).
+      orientLayers: (outline) => options.compositing === 'shader' || !!outline.clipBox,
+      ...(layerModule ? { normalizeLayers: layerModule.normalizeLayers } : {}),
+      ...(options.targetPiecesPerBand === undefined
+        ? {}
+        : { targetPiecesPerBand: options.targetPiecesPerBand }),
+    },
+  )
+  const switchable = companionBuilder
+    ? (switchModule?.switchableRequests(resolved, prepared.glyphs) ?? [])
+    : []
+  // Effects bake every drawable outline for the underlay; an empty one is drawn by nothing.
+  const companionReqs = effects
+    ? resolved.flatMap((i) =>
+        prepared.glyphs.get(i.request.key)?.monotonePieceCount ? [i.request] : [],
+      )
+    : switchable
+  const layered = prepared.layered || missing.length > 0 || companionReqs.length > 0
+  if (layered && limit < 8) {
+    if (fallback) return null
+    throw new Error('DomSdf: layered Windfoil requires eight vertex buffers')
+  }
+  const wantsColor = [...prepared.glyphs.values()].some(
+    (header) =>
+      (header.layers?.some((layer) => layer.paintKind === 2) ?? false) ||
+      (header.layers && (options.compositing === 'shader' || !!header.clipBox)),
+  )
+  const colorPromise = wantsColor ? import('./color.js') : null
+  const companionResource =
+    (missing.length || companionReqs.length) && companionBuilder
+      ? await extensions!.buildCompanion(
+          companionBuilder,
+          [...missing.map((item) => item.request), ...companionReqs],
+          signal,
+        )
+      : null
+  let companion = companionResource?.atlas ?? null
+  const view =
+    companion && switchable.length
+      ? switchModule!.companionView(
+          companion,
+          missing.map((item) => item.request.key),
+          switchable,
+        )
+      : null
+  if (view && !effects) {
+    companion = view.atlas
+    if (!companion) companionResource!.dispose()
+  }
+  let coverage: ReturnType<typeof createWindfoilStorage> | undefined,
+    colorResources: WindfoilColorResources | null = null
+  try {
+    const colorModule = colorPromise ? await abortable(colorPromise, signal) : null
+    throwIfAborted(signal)
+    coverage = createWindfoilStorage(renderer, prepared)
+    colorResources =
+      colorModule?.buildWindfoilColorResources(renderer, prepared, options, coverage, signal) ??
+      null
+    const plainGlyphs = colorResources?.plainGlyphs ?? prepared.glyphs
+    const ordinalsCache = new WeakMap<DomLayoutSnapshot, Float32Array>()
+    const motionOrdinals = (snapshot: DomLayoutSnapshot): Float32Array => {
+      let cached = ordinalsCache.get(snapshot)
+      if (!cached) {
+        if (extensions) {
+          cached = extensions.motionOrdinals(snapshot, prepared.glyphs, companion)
+        } else {
+          const count = snapshot.glyphs.length
+          cached = new Float32Array(count)
+          for (let i = 0; i < count; i++) cached[i] = i
+        }
+        ordinalsCache.set(snapshot, cached)
+      }
+      return cached
+    }
+    const sizeSwitch = view?.keys.size
+      ? switchModule!.createSizeSwitch(sdfBelow!, view.keys, prepared.glyphs, motionOrdinals)
+      : null
+    // A tone that dilates the outline reads each glyph's font size from `sdfMeta.z`: zero or
+    // below never switches, so the size switch keeps its own meaning of the sign. An SVG
+    // shape has no font size: its outline stays where it is.
+    let glyphEm = false
+    const sized = new WeakMap<DomLayoutSnapshot, DomLayoutSnapshot>()
+    const withEm = (snapshot: DomLayoutSnapshot): DomLayoutSnapshot => {
+      let layout = sized.get(snapshot)
+      if (!layout) {
+        layout = {
+          ...snapshot,
+          sizeSwitched: true,
+          glyphs: snapshot.glyphs.map((glyph) => ({
+            ...glyph,
+            switchEm: glyph.shapeGroup === undefined ? -glyph.fontSize : 0,
+          })),
+        }
+        sized.set(snapshot, layout)
+      }
+      return layout
+    }
+    const switched = (snapshot: DomLayoutSnapshot): DomLayoutSnapshot => {
+      const layout = glyphEm ? withEm(snapshot) : snapshot
+      return sizeSwitch?.layout(layout) ?? layout
+    }
+    let geometryLayered = layered,
+      disposed = false
+    const retained = coverage
+    return {
+      kind: 'windfoil',
+      layered,
+      companion,
+      effects,
+      color: colorResources?.composite ?? null,
+      sizeSwitch,
+      motionOrdinals,
+      glyphs: prepared.glyphs,
+      covers(key) {
+        return prepared.glyphs.has(key) || !!companion?.glyphs.has(key)
+      },
+      primaryCovers(key) {
+        return !!plainGlyphs.get(key)?.monotonePieceCount
+      },
+      analyticCovers(key) {
+        return (
+          !!plainGlyphs.get(key)?.monotonePieceCount ||
+          !!colorResources?.composite?.glyphs.get(key)?.monotonePieceCount
+        )
+      },
+      storageBytes: coverage.storageBytes + (colorResources?.storageBytes ?? 0),
+      preprocessStats: prepared.stats,
+      contentFits(geometry, snapshot) {
+        return windfoilContentFits(geometry, switched(snapshot), plainGlyphs)
+      },
+      createGeometry(snapshot, padding, ordinals) {
+        snapshot = switched(snapshot)
+        ordinals ??= companion || colorResources?.composite ? motionOrdinals(snapshot) : undefined
+        geometryLayered =
+          layered || !!ordinals || snapshot.glyphs.some((glyph) => !!glyph.motionOrigin)
+        if (geometryLayered && limit < 8)
+          throw new Error('DomSdf: layered Windfoil requires eight vertex buffers')
+        return createWindfoilGlyphGeometry(
+          snapshot,
+          plainGlyphs,
+          padding,
+          geometryLayered,
+          ordinals,
+        )
+      },
+      updateGeometry(geometry, snapshot, padding, ordinals) {
+        snapshot = switched(snapshot)
+        ordinals ??= companion || colorResources?.composite ? motionOrdinals(snapshot) : undefined
+        return updateWindfoilGlyphGeometry(geometry, snapshot, plainGlyphs, padding, ordinals)
+      },
+      setGlyphEm(value) {
+        glyphEm = value
+      },
+      createMaterial(materialOptions) {
+        return new WindfoilMaterial({
+          ...retained,
+          layered: geometryLayered,
+          ...(colorResources ? { paintFunctions: colorResources.paintFunctions } : {}),
+          ...materialOptions,
+          ...(sizeSwitch ? { keepGlyph: sizeSwitch.windfoil } : {}),
+        })
+      },
+      dispose() {
+        if (disposed) return
+        disposed = true
+        retained.dispose()
+        colorResources?.dispose()
+        companionResource?.dispose()
+      },
+    }
+  } catch (error) {
+    coverage?.dispose()
+    colorResources?.dispose()
+    companionResource?.dispose()
+    throw error
+  }
+}

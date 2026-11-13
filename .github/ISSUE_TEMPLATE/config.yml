@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://ultra-text.makio.io/docs
+    about: Guides for Three.js, React Three Fiber, TresJS, Mini3 and vanilla WebGPU.
+  - name: Security report
+    url: https://github.com/Makio64/ultra-text/security/advisories/new
+    about: Report vulnerabilities privately, not as a public issue.

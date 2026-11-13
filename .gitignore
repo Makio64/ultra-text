@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+
+# Build and test output
+coverage/
+dist/
+*.tsbuildinfo
+*.tgz
+
+# Tool caches
+.eslintcache
+.vite/
+.vitest/
+.pnpm-store/
+
+# Local environment
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Editors and operating systems
+.DS_Store
+.claude/
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# Local task logs and measurements
+reports/
+
+# Scratch files from local investigations
+zz-*
+*.scratch.*

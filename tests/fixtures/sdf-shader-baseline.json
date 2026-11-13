@@ -1,0 +1,146 @@
+{
+  "reference": "abacb23af5b82fed921025992a40e3e7afa1fd77",
+  "three": "0.187.0",
+  "cases": [
+    {
+      "webgl": false,
+      "index": 0,
+      "shadow": false,
+      "vertex": "2588f849c321f6f8beeaa3b47724b910bc3dae73ac2c28c0a566168bf4029f01",
+      "fragment": "111aa201804a79c0adc51b4591e6021912cbce4337b228324d6fc04208f51311"
+    },
+    {
+      "webgl": false,
+      "index": 0,
+      "shadow": true,
+      "vertex": "c99d3744229d30669ddda4f2922198cd809b2f3d7df9afc688ffd0663db2b97f",
+      "fragment": "23b2d80a4bb3a84b969a24a911e8e1eae971effdd467aa113b79b11d948105d1"
+    },
+    {
+      "webgl": false,
+      "index": 1,
+      "shadow": false,
+      "vertex": "431c2adf1653967b9ecbb3ac7366063ae8a8ba962394ff44f5ee5dbcaf35b9b6",
+      "fragment": "90c2273d1b6b075816ac42dc59142dca11a554653f40ec4df8295635819eb625"
+    },
+    {
+      "webgl": false,
+      "index": 1,
+      "shadow": true,
+      "vertex": "d22d91585656285d8f8ebab3364f98d16f87eb8c4f4d4dd04d91f8abb9335d9c",
+      "fragment": "1e49ad92ed10207b5ae38397369fb9b9bf250e9d8043d8b1940a9808641213f2"
+    },
+    {
+      "webgl": false,
+      "index": 2,
+      "shadow": false,
+      "vertex": "05f05149b7bd0fc472cf6539095831e375aa8553b6cce13e6efc12e1cb84b982",
+      "fragment": "d3af20580ef3706afc6d56a81c4800d1e030d735c70a3bdf5ec41f46bfdb8c9a"
+    },
+    {
+      "webgl": false,
+      "index": 2,
+      "shadow": true,
+      "vertex": "ef935fdb3a7d5a059f402b7f677672750e7e81ec7c59402235b7e214f788bd4a",
+      "fragment": "4c618850d2e7617187b112814e09c500dce36b1b4f7a8b061342ac74dfe76fe9"
+    },
+    {
+      "webgl": false,
+      "index": 3,
+      "shadow": false,
+      "vertex": "18cabc51e57d741525d43f2161004a690ce25c4150a503aa1f71d887827094dc",
+      "fragment": "0ce49875fdf1df87c939c45ab513cace7295d1f3dd464fc26f048ca283ad712f"
+    },
+    {
+      "webgl": false,
+      "index": 3,
+      "shadow": true,
+      "vertex": "c99d3744229d30669ddda4f2922198cd809b2f3d7df9afc688ffd0663db2b97f",
+      "fragment": "23b2d80a4bb3a84b969a24a911e8e1eae971effdd467aa113b79b11d948105d1"
+    },
+    {
+      "webgl": false,
+      "index": 4,
+      "shadow": false,
+      "vertex": "43bc846fcaa63e1f0d20f5f40b91cdcf5029a33d80a02ceec5755c36d36a2e29",
+      "fragment": "111aa201804a79c0adc51b4591e6021912cbce4337b228324d6fc04208f51311"
+    },
+    {
+      "webgl": false,
+      "index": 4,
+      "shadow": true,
+      "vertex": "a26de57f8a7a8918476f377e26a8bc0a9a7b00dde57079807e1687f6db416cc3",
+      "fragment": "23b2d80a4bb3a84b969a24a911e8e1eae971effdd467aa113b79b11d948105d1"
+    },
+    {
+      "webgl": true,
+      "index": 0,
+      "shadow": false,
+      "vertex": "d59aba98f5137aa4b54401670402d9e86c267dcbe05de0d2f84e9cbf8fc83872",
+      "fragment": "1ebad4bea6d8843422399af920ec19e51455e8753d535fdefe06e9964adb9bb5"
+    },
+    {
+      "webgl": true,
+      "index": 0,
+      "shadow": true,
+      "vertex": "4a9827c1d945df77a7c7d26eb703fcdbd62586d5f11ce9a91240c7ebb7ba255e",
+      "fragment": "3159a1fe46db0ba50013fbadcbdcf1e07e1de6e17e7730935f1719b3b3547c13"
+    },
+    {
+      "webgl": true,
+      "index": 1,
+      "shadow": false,
+      "vertex": "1f60132a56182b375e73f55cba4283e434c8e647faec32d2880f4cb7c5f05ffe",
+      "fragment": "7ed8cdbcb536d719bb52a3f9e6f4a9c01e86121c0d21f8fd0e7cbbb715b25411"
+    },
+    {
+      "webgl": true,
+      "index": 1,
+      "shadow": true,
+      "vertex": "43df3cbabbccb55424d307881128716edae4b15a128ae42586cd24f631a7f0ba",
+      "fragment": "45759ca019504688b1fc73dc7e811a32f23493d031fb83a77bee02e5bbf74804"
+    },
+    {
+      "webgl": true,
+      "index": 2,
+      "shadow": false,
+      "vertex": "20915c8a271a48899354d1f950c716ec423cad92304102737045db6ffe0e7a38",
+      "fragment": "5f9f9c3ae924503071ca9ed35a6dc3c333b077640c0af9b2b84db831c0578e59"
+    },
+    {
+      "webgl": true,
+      "index": 2,
+      "shadow": true,
+      "vertex": "5dce2a2e2dbfbf6ee316c71dea3cedbbcbdb20ab04d9ec229c23a313366b4e8a",
+      "fragment": "965660e413d2855072e1fcad9316e7efee0767af5c2ddeac8bd33ff6d48e23b0"
+    },
+    {
+      "webgl": true,
+      "index": 3,
+      "shadow": false,
+      "vertex": "974fa1b80d8f6968d454b0da0f9f74fec862ba9ce872996224df95ae5a452809",
+      "fragment": "1cc59cd9596631912652e7c3d173f20129f78f73cd760e2f0cb16c30e3bc375e"
+    },
+    {
+      "webgl": true,
+      "index": 3,
+      "shadow": true,
+      "vertex": "4a9827c1d945df77a7c7d26eb703fcdbd62586d5f11ce9a91240c7ebb7ba255e",
+      "fragment": "3159a1fe46db0ba50013fbadcbdcf1e07e1de6e17e7730935f1719b3b3547c13"
+    },
+    {
+      "webgl": true,
+      "index": 4,
+      "shadow": false,
+      "vertex": "472c653dcc58a30befa97997c65e25c8d54578aabb44874ebb07f86b7d529f74",
+      "fragment": "1ebad4bea6d8843422399af920ec19e51455e8753d535fdefe06e9964adb9bb5"
+    },
+    {
+      "webgl": true,
+      "index": 4,
+      "shadow": true,
+      "vertex": "0532ba9f49293821176c2c1d531ce4485b930c8c0a5d783eb3baceb531f48460",
+      "fragment": "3159a1fe46db0ba50013fbadcbdcf1e07e1de6e17e7730935f1719b3b3547c13"
+    }
+  ]
+}

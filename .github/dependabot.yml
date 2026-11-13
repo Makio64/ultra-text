@@ -1,0 +1,11 @@
+version: 2
+updates:
+  # Keep workflow actions current. npm dependencies are updated deliberately: the Three.js
+  # peer range and the shader snapshot tests move together.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ['*']
