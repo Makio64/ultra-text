@@ -2,10 +2,10 @@ name: Release
 
 # Tag a version to release:
 #   npm version <patch|minor|major> && git push --follow-tags
-# npm trusted publishing (OIDC) authenticates this workflow and attaches provenance, so no
-# long-lived token is needed once the package's trusted publisher is configured on npmjs.com
-# (repository Makio64/ultra-text, workflow release.yml, environment release). Provenance
-# requires a public repository.
+# npm trusted publishing (OIDC) authenticates this workflow and attaches provenance: no npm
+# token is stored anywhere. The package's trusted publisher on npmjs.com names this repository
+# (Makio64/ultra-text), this workflow (release.yml) and the `release` environment, which only
+# `v*` tags may use.
 on:
   push:
     tags:
@@ -43,6 +43,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Check the version is not on npm yet
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          if npm view "ultra-text@$version" version > /dev/null 2>&1; then
+            echo "ultra-text@$version is already on npm" >&2
+            exit 1
+          fi
+
       - name: Verify the tag matches package.json
         run: |
           tag="${GITHUB_REF_NAME#v}"
@@ -57,5 +65,3 @@ jobs:
         run: npm publish
         env:
           NODE_OPTIONS: --max-old-space-size=4096
-          # Only for a first publish before the trusted publisher exists; OIDC is used otherwise.
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
